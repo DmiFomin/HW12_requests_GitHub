@@ -1,0 +1,1 @@
+{"https://github.com/DanteOnline/unsafe-python-code": {"languages": ["python"], "unsafe_modules": [{"name_module": "eval_warning.py", "description": "В коде есть функция eval", "status": "Потенциально опасен"}, {"name_module": "eval_error.py", "description": "В функцию eval, возможно, передано значение из внешнего источника.", "status": "Содержит уязвимость."}]}}
