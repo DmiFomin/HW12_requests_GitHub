@@ -11,18 +11,11 @@ def get_program_settings():
     :return: Возвращаем словарь с настройками
     """
     # TODO возможно стоит сделать загрузку из файла
-    unsafe_codes = [{'language': 'python', 'string_code': 'eval', 'description': 'В коде есть функция eval',
-                    'status': 'Потенциально опасен', 'extra_check': True},
-                    {'language': 'python', 'string_code': 'SELECT', 'description': 'В коде есть sql инъекция SELECT', 'status': 'Потенциально опасен', 'extra_check': True},
-                    {'language': 'python', 'string_code': 'INPUT', 'description': 'В коде есть sql инъекция INPUT', 'status': 'Потенциально опасен', 'extra_check': True},
-                    {'language': 'python', 'string_code': 'UPDATE', 'description': 'В коде есть sql инъекция UPDATE', 'status': 'Потенциально опасен', 'extra_check': True},
-                    {'language': 'python', 'string_code': 'DELETE', 'description': 'В коде есть sql инъекция DELETE', 'status': 'Потенциально опасен', 'extra_check': True}
-                   # {'language': 'python', 'string_code': 'pickle', 'description': 'В коде используется модуль pickle', 'status': 'Потенциально опасен'},
-                   # {'language': 'python', 'string_code': 'login', 'description': 'В коде возможно указан логин', 'status': 'Содержит уязвимость'},
-                   # {'language': 'python', 'string_code': 'password', 'description': 'В коде возможно указан пароль', 'status': 'Содержит уязвимость'},
-                   # {'language': 'django', 'string_code': 'EMAIL_HOST_USER', 'description': 'Явно указаны пароли от email', 'status': 'Содержит уязвимость'},
-                   # {'language': 'django', 'string_code': 'EMAIL_HOST_PASSWORD', 'description': 'Явно указаны пароли от email', 'status': 'Содержит уязвимость'},
-                   # {'language': 'django', 'string_code': '@csrf_exempt', 'description': 'Локально отключен csrf token', 'status': 'Потенциально опасен'}
+    unsafe_codes = [{'language': 'python', 'string_code': 'eval', 'description': 'В коде есть функция eval', 'status': 'Потенциально опасен'},
+                    {'language': 'python', 'string_code': 'sqlite3', 'description': 'В коде есть sql инъекция SELECT', 'status': 'Содержит уязвимость'},
+                    {'language': 'python', 'string_code': 'pickle', 'description': 'В коде используется модуль pickle', 'status': 'Потенциально опасен'},
+                    {'language': 'python', 'string_code': 'EMAIL_HOST_USER', 'description': 'Явно указан email', 'status': 'Содержит уязвимость'},
+                    {'language': 'python', 'string_code': 'EMAIL_HOST_PASSWORD', 'description': 'Явно указаны пароли от email', 'status': 'Содержит уязвимость'}
                    ]
 
     program_settings = {'path_to_token': os.path.join(os.getcwd(), 'GitHub_Token'), 'unsafe_codes': unsafe_codes}
@@ -45,27 +38,72 @@ def load_token(path):
             print('Файл с токеном GitHub не обнаружен!')
 
 
+def external_source(content):
+    return '.read()' in content or 'input' in content or 'open('
+
+
 # Решил для каждой проверки сделать свою функцию.
-def check_eval(decoded_content, element_unsafe_code, session):
+def check_eval(decoded_content, element_unsafe_code):
 
-    result = {}
+    result_list = []
     if 'eval(' in decoded_content:
-        if '.read()' in decoded_content or 'input' in decoded_content:
-            result['description'] = 'В функцию eval, возможно, передано значение из внешнего источника.'
-            result['status'] = 'Содержит уязвимость.'
+        if external_source(decoded_content):
+            result_list.append({'description': 'В функцию eval, возможно, передано значение из внешнего источника.', 'status': 'Содержит уязвимость.'})
         else:
-            result['description'] = element_unsafe_code['description']
-            result['status'] = element_unsafe_code['status']\
+            result_list.append({'description': element_unsafe_code['description'], 'status': element_unsafe_code['status']})
 
-    return result
+    return result_list
 
 
-def check_SQL(decoded_content, element_unsafe_code, session):
-    regular_str = 'f"{} SELECT {} FROM'
+def check_SQL(decoded_content):
 
-    match = re.search(r'\d\d\D\d\d', r'Телефон 123-12-12')
-    print(match[0] if match else 'Not found')
+    result_SELECT = re.search(r"f'*select.+from*", decoded_content.lower())
+    result_SELECT_format = re.search(r"select.+from.+\.format", decoded_content.lower())
+    result_INSERT = re.search(r"f'*insert into*", decoded_content.lower())
+    result_INSERT_format = re.search(r"insert into.+\.format", decoded_content.lower())
+    result_UPDATE = re.search(r"f'*update.+set*", decoded_content.lower())
+    result_UPDATE_format = re.search(r"update.+set.+\.format", decoded_content.lower())
+    result_DELETE = re.search(r"f'*delete.+from*", decoded_content.lower())
+    result_DELETE_format = re.search(r"delete.+from.+\.format", decoded_content.lower())
 
+    result_list = []
+    if result_SELECT != None or result_SELECT_format != None:
+        if external_source(decoded_content):
+            result_list.append({'description': 'В коде есть SQL запрос SELECT с получением данных из внешнего источника и, возможно, выполняется напрямую в БД.', 'status': 'Содержит уязвимость.'})
+
+    if result_INSERT != None or result_INSERT_format != None:
+        if external_source(decoded_content):
+            result_list.append({'description': 'В коде есть SQL запрос INSERT с получением данных из внешнего источника и, возможно, выполняется напрямую в БД.', 'status': 'Содержит уязвимость.'})
+
+    if result_UPDATE != None or result_UPDATE_format != None:
+        if external_source(decoded_content):
+            result_list.append({'description': 'В коде есть SQL запрос UPDATE с получением данных из внешнего источника и, возможно, выполняется напрямую в БД.', 'status': 'Содержит уязвимость.'})
+
+    if result_DELETE != None or result_DELETE_format != None:
+        if external_source(decoded_content):
+            result_list.append({'description': 'В коде есть SQL запрос SELECT с получением данных из внешнего источника и, возможно, выполняется напрямую в БД.', 'status': 'Содержит уязвимость.'})
+
+    return result_list
+
+
+def check_pickle(decoded_content, element_unsafe_code):
+    result_list = []
+    if 'pickle.load(' in decoded_content:
+        if external_source(decoded_content):
+            result_list.append({'description': 'В функцию pickle.load(), возможно, передаются данные из стороннего источника ', 'status': 'Содержит уязвимость.'})
+        else:
+            result_list.append({'description': element_unsafe_code['description'], 'status': element_unsafe_code['status']})
+
+    return result_list
+
+
+def check_django_email(decoded_content, element_unsafe_code, name_module):
+    result_list = []
+    if name_module =='settings.py':
+        if f'{element_unsafe_code["string_code"]} =' in decoded_content:
+            result_list.append({'description': element_unsafe_code['description'], 'status': element_unsafe_code['status']})
+
+    return result_list
 
 
 def write_results(item, danger_modules_describe, element_unsafe_code, session):
@@ -75,27 +113,34 @@ def write_results(item, danger_modules_describe, element_unsafe_code, session):
     file_response = session.get(html_url)
     decoded_content = base64.b64decode(file_response.json()['content']).decode('utf-8')
 
-    result_check = {}
+    result_check_list = []
     if element_unsafe_code['string_code'] == 'eval':
-        result_check = check_eval(decoded_content, element_unsafe_code, session)
-    elif element_unsafe_code['string_code'] in ['SELECT', 'INPUT', 'UPDATE', 'DELETE']:
-        result_check = check_SQL(decoded_content, element_unsafe_code, session)
+        result_check_list = check_eval(decoded_content, element_unsafe_code)
+    elif element_unsafe_code['string_code'] == 'sqlite3':
+        result_check_list = check_SQL(decoded_content)
+    elif element_unsafe_code['string_code'] == 'pickle':
+        result_check_list = check_pickle(decoded_content, element_unsafe_code)
+    elif element_unsafe_code['string_code'] == 'EMAIL_HOST_USER' or element_unsafe_code['string_code'] == 'EMAIL_HOST_PASSWORD':
+        result_check_list = check_django_email(decoded_content, element_unsafe_code, item['name'])
+
+
 
     # Получаем данные для вывода
-    repository_url = item['repository']['html_url']
-    language = element_unsafe_code['language']
-    name_module = item['name']
-    description = result_check['description']
-    status = result_check['status']
+    for result_check in result_check_list:
+        repository_url = item['repository']['html_url']
+        language = element_unsafe_code['language']
+        name_module = item['name']
+        description = result_check['description']
+        status = result_check['status']
 
-    unsafe_modules = {'name_module': name_module, 'description': description, 'status': status}
+        unsafe_modules = {'name_module': name_module, 'description': description, 'status': status}
 
-    if repository_url in danger_modules_describe:
-        if not (language in danger_modules_describe[repository_url]['languages']):
-            danger_modules_describe[repository_url]['languages'].append(language)
-        danger_modules_describe[repository_url]['unsafe_modules'].append(unsafe_modules)
-    else:
-        danger_modules_describe[repository_url] = {'languages': [language], 'unsafe_modules' : [unsafe_modules]}
+        if repository_url in danger_modules_describe:
+            if not (language in danger_modules_describe[repository_url]['languages']):
+                danger_modules_describe[repository_url]['languages'].append(language)
+            danger_modules_describe[repository_url]['unsafe_modules'].append(unsafe_modules)
+        else:
+            danger_modules_describe[repository_url] = {'languages': [language], 'unsafe_modules' : [unsafe_modules]}
 
     return danger_modules_describe
 
@@ -105,3 +150,4 @@ def write_json(danger_modules_describe):
 
     with open('danger_modules_GitHub.json', 'w', encoding='utf-8') as f:
         json.dump(danger_modules_describe, f, ensure_ascii=False)
+        pprint.pprint(danger_modules_describe)

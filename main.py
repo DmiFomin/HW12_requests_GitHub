@@ -1,6 +1,5 @@
 import functions as fn
 import requests
-import pprint
 
 # Записываем настройки
 PROGRAM_SETTINGS = fn.get_program_settings()
@@ -15,16 +14,17 @@ danger_modules_describe = {}
 
 string_languages = ''
 string_searching = ''
-for i, element_unsafe_code in enumerate(unsafe_code):
+for element_unsafe_code in unsafe_code:
     string_languages = f'language:{element_unsafe_code["language"]}'
     string_searching = element_unsafe_code["string_code"]
 
-    print('--------------------------- Ищем ', string_searching, ' в модулях на ', string_languages, '---------------------------')
+    print('--------------------------- Ищем', string_searching, 'в модулях на', string_languages, '---------------------------')
 
-    string_connect = f'https://api.github.com/search/code?q={string_searching}in:file+{string_languages}+user:DanteOnline'
+    #string_connect = f'https://api.github.com/search/code?q={string_searching}in:file+{string_languages}+user:DanteOnline'
+    string_connect = f'https://api.github.com/search/code?q={string_searching}in:file+{string_languages}'
     try:
         result = session.get(string_connect)
-        print(result.status_code)
+        #print(result.status_code)
         items = result.json()['items']
 
         for item in items:
