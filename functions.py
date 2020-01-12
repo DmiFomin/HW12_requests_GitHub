@@ -11,11 +11,11 @@ def get_program_settings():
     :return: Возвращаем словарь с настройками
     """
     # TODO возможно стоит сделать загрузку из файла
-    unsafe_codes = [{'language': 'python', 'string_code': 'eval', 'description': 'В коде есть функция eval', 'status': 'Потенциально опасен'},
-                    {'language': 'python', 'string_code': 'sqlite3', 'description': 'В коде есть sql инъекция SELECT', 'status': 'Содержит уязвимость'},
-                    {'language': 'python', 'string_code': 'pickle', 'description': 'В коде используется модуль pickle', 'status': 'Потенциально опасен'},
-                    {'language': 'python', 'string_code': 'EMAIL_HOST_USER', 'description': 'Явно указан email', 'status': 'Содержит уязвимость'},
-                    {'language': 'python', 'string_code': 'EMAIL_HOST_PASSWORD', 'description': 'Явно указаны пароли от email', 'status': 'Содержит уязвимость'}
+    unsafe_codes = [{'language': 'python', 'string_code': 'eval', 'description': 'В коде есть функция eval.',  'add_description': 'В функцию eval, возможно, передано значение из внешнего источника.', 'status': 'Потенциально опасен'},
+                    {'language': 'python', 'string_code': 'sqlite3', 'description': 'В коде есть sql инъекция.', 'add_description': '', 'status': 'Содержит уязвимость'},
+                    {'language': 'python', 'string_code': 'pickle', 'description': 'В коде используется модуль pickle.', 'add_description': 'В функцию pickle.load(), возможно, передаются данные из стороннего источника.', 'status': 'Потенциально опасен'},
+                    {'language': 'python', 'string_code': 'EMAIL_HOST_USER', 'description': 'Явно указан email.', 'add_description': '', 'status': 'Содержит уязвимость'},
+                    {'language': 'python', 'string_code': 'EMAIL_HOST_PASSWORD', 'description': 'Явно указаны пароли от email.', 'add_description': '', 'status': 'Содержит уязвимость'}
                    ]
 
     program_settings = {'path_to_token': os.path.join(os.getcwd(), 'GitHub_Token'), 'unsafe_codes': unsafe_codes}
@@ -48,7 +48,7 @@ def check_eval(decoded_content, element_unsafe_code):
     result_list = []
     if 'eval(' in decoded_content:
         if external_source(decoded_content):
-            result_list.append({'description': 'В функцию eval, возможно, передано значение из внешнего источника.', 'status': 'Содержит уязвимость.'})
+            result_list.append({'description': element_unsafe_code['add_description'], 'status': 'Содержит уязвимость.'})
         else:
             result_list.append({'description': element_unsafe_code['description'], 'status': element_unsafe_code['status']})
 
@@ -90,7 +90,7 @@ def check_pickle(decoded_content, element_unsafe_code):
     result_list = []
     if 'pickle.load(' in decoded_content:
         if external_source(decoded_content):
-            result_list.append({'description': 'В функцию pickle.load(), возможно, передаются данные из стороннего источника ', 'status': 'Содержит уязвимость.'})
+            result_list.append({'description': element_unsafe_code['add_description'], 'status': 'Содержит уязвимость.'})
         else:
             result_list.append({'description': element_unsafe_code['description'], 'status': element_unsafe_code['status']})
 
