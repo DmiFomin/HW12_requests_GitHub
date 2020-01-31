@@ -1,39 +1,60 @@
 import functions as fn
-import requests
+from flask import Flask, render_template, request
 
 # Записываем настройки
 PROGRAM_SETTINGS = fn.get_program_settings()
+user_settings = {'eval': 'on', 'sqlite3': 'on', 'pickle': 'on', 'EMAIL_HOST_USER': 'on', 'EMAIL_HOST_PASSWORD': 'on', '11':'22'}
+contacts_info = {'author': PROGRAM_SETTINGS['author'],
+                 'phone': PROGRAM_SETTINGS['phone'],
+                 'email': PROGRAM_SETTINGS['email']}
 
-# Загружаем токен из файла
-token = fn.load_token(PROGRAM_SETTINGS['path_to_token'])
-session = requests.Session()
-session.auth = ('DmiFomin', token)
-
-unsafe_code = PROGRAM_SETTINGS['unsafe_codes']
-danger_modules_describe = {}
-
-string_languages = ''
-string_searching = ''
-for element_unsafe_code in unsafe_code:
-    string_languages = f'language:{element_unsafe_code["language"]}'
-    string_searching = element_unsafe_code["string_code"]
-
-    print('--------------------------- Ищем', string_searching, 'в модулях на', string_languages, '---------------------------')
-
-    #string_connect = f'https://api.github.com/search/code?q={string_searching}in:file+{string_languages}+user:DanteOnline'
-    string_connect = f'https://api.github.com/search/code?q={string_searching}in:file+{string_languages}'
-    try:
-        result = session.get(string_connect)
-        #print(result.status_code)
-        items = result.json()['items']
-
-        for item in items:
-            if not item['path'].startswith('venv'):
-                danger_modules_describe = fn.write_results(item, danger_modules_describe, element_unsafe_code, session)
-
-    except Exception as e:
-        print(e)
+app = Flask(__name__)
 
 
-fn.write_json(danger_modules_describe)
+@app.route("/")
+def run():
+    return render_template('index.html', unsafe_codes = PROGRAM_SETTINGS['unsafe_codes'])
+
+
+@app.route('/index/')
+def index():
+    return render_template('index.html', unsafe_codes = PROGRAM_SETTINGS['unsafe_codes'])
+
+
+@app.route('/searching/', methods=['GET'])
+def searching():
+    print('GET')
+    return render_template('searching.html', unsafe_codes = PROGRAM_SETTINGS['unsafe_codes'], user_settings = user_settings, danger_modules_describe='BeforeSearching')
+
+
+@app.route('/searching/', methods=['POST'])
+def run_post():
+    params = request.form
+    global user_settings
+    user_settings = {}
+    print('POST')
+    for param in params:
+        if param != 'repository_name':
+            user_settings[param] = 'on'
+        else:
+            user_settings[param] = params['repository_name']
+
+    print(user_settings)
+
+    # TODO Хотел добавить прогрессбар, но не получилось. Не понял как обновить страницу без return.
+    #render_template('searching.html', unsafe_codes=PROGRAM_SETTINGS['unsafe_codes'],  user_settings=user_settings, danger_modules_describe='Searching')
+    danger_modules_describe = fn.seaching_unsafe_code(user_settings)
+    return render_template('searching.html', unsafe_codes = PROGRAM_SETTINGS['unsafe_codes'], user_settings = user_settings, danger_modules_describe=danger_modules_describe)
+
+
+@app.route('/contacts/')
+def contacts():
+    return render_template('contacts.html', contacts_info = contacts_info)
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+
+
 
