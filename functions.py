@@ -3,6 +3,7 @@ import json
 import pprint
 import base64
 import re
+import requests
 
 
 def get_program_settings():
@@ -18,7 +19,12 @@ def get_program_settings():
                     {'language': 'python', 'string_code': 'EMAIL_HOST_PASSWORD', 'description': 'Явно указаны пароли от email.', 'add_description': '', 'status': 'Содержит уязвимость'}
                    ]
 
-    program_settings = {'path_to_token': os.path.join(os.getcwd(), 'GitHub_Token'), 'unsafe_codes': unsafe_codes}
+    program_settings = {'path_to_token': os.path.join(os.getcwd(), 'GitHub_Token'),
+                        'unsafe_codes': unsafe_codes,
+                        'author': 'Фомин Дмитрий',
+                        'phone': '8-123-123-12-12',
+                        'email': 'email@email.com'}
+
     return program_settings
 
 
@@ -123,8 +129,6 @@ def write_results(item, danger_modules_describe, element_unsafe_code, session):
     elif element_unsafe_code['string_code'] == 'EMAIL_HOST_USER' or element_unsafe_code['string_code'] == 'EMAIL_HOST_PASSWORD':
         result_check_list = check_django_email(decoded_content, element_unsafe_code, item['name'])
 
-
-
     # Получаем данные для вывода
     for result_check in result_check_list:
         repository_url = item['repository']['html_url']
@@ -132,8 +136,10 @@ def write_results(item, danger_modules_describe, element_unsafe_code, session):
         name_module = item['name']
         description = result_check['description']
         status = result_check['status']
+        url_module = item['html_url']
+        #pprint.pprint(item)
 
-        unsafe_modules = {'name_module': name_module, 'description': description, 'status': status}
+        unsafe_modules = {'name_module': name_module, 'description': description, 'status': status, 'url_module': url_module}
 
         if repository_url in danger_modules_describe:
             if not (language in danger_modules_describe[repository_url]['languages']):
@@ -151,3 +157,42 @@ def write_json(danger_modules_describe):
     with open('danger_modules_GitHub.json', 'w', encoding='utf-8') as f:
         json.dump(danger_modules_describe, f, ensure_ascii=False)
         pprint.pprint(danger_modules_describe)
+
+
+def seaching_unsafe_code(user_settings):
+    #Загружаем токен из файла
+    token = load_token(get_program_settings()['path_to_token'])
+    session = requests.Session()
+    session.auth = ('DmiFomin', token)
+
+    unsafe_code = get_program_settings()['unsafe_codes']
+    danger_modules_describe = {}
+
+    repository_name = user_settings['repository_name']
+
+    for element_unsafe_code in unsafe_code:
+        if not (element_unsafe_code['string_code'] in user_settings):
+            continue
+
+        string_languages = f'language:{element_unsafe_code["language"]}'
+        string_searching = element_unsafe_code["string_code"]
+
+        print('--------------------------- Ищем', string_searching, 'в модулях на', string_languages, '---------------------------')
+        #string_connect = f'https://api.github.com/search/code?q={string_searching}in:file+{string_languages}+user:DanteOnline'
+        string_connect = f'https://api.github.com/search/code?q={string_searching}in:file+{string_languages}page=20&per_page=100{f"+user:{repository_name}" if repository_name else ""}'
+        print(string_connect)
+        try:
+            result = session.get(string_connect)
+            #print(result.status_code)
+            items = result.json()['items']
+
+            for item in items:
+                if not item['path'].startswith('venv'):
+                    danger_modules_describe = write_results(item, danger_modules_describe, element_unsafe_code, session)
+
+        except Exception as e:
+            print(e)
+
+
+    write_json(danger_modules_describe)
+    return danger_modules_describe
