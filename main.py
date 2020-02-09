@@ -1,6 +1,7 @@
 import functions as fn
 from flask import Flask, render_template, request
 
+
 # Записываем настройки
 PROGRAM_SETTINGS = fn.get_program_settings()
 user_settings = {'eval': 'on', 'sqlite3': 'on', 'pickle': 'on', 'EMAIL_HOST_USER': 'on', 'EMAIL_HOST_PASSWORD': 'on', '11':'22'}
@@ -23,7 +24,7 @@ def index():
 
 @app.route('/searching/', methods=['GET'])
 def searching():
-    print('GET')
+    #print('GET')
     return render_template('searching.html', unsafe_codes = PROGRAM_SETTINGS['unsafe_codes'], user_settings = user_settings, danger_modules_describe='BeforeSearching')
 
 
@@ -32,19 +33,30 @@ def run_post():
     params = request.form
     global user_settings
     user_settings = {}
-    print('POST')
+    #print('POST')
     for param in params:
         if param != 'repository_name':
             user_settings[param] = 'on'
         else:
             user_settings[param] = params['repository_name']
 
-    print(user_settings)
-
-    # TODO Хотел добавить прогрессбар, но не получилось. Не понял как обновить страницу без return.
-    #render_template('searching.html', unsafe_codes=PROGRAM_SETTINGS['unsafe_codes'],  user_settings=user_settings, danger_modules_describe='Searching')
-    danger_modules_describe = fn.seaching_unsafe_code(user_settings)
+    #print(user_settings)
+    danger_modules_describe = fn.seaching_unsafe_code(user_settings, PROGRAM_SETTINGS)
     return render_template('searching.html', unsafe_codes = PROGRAM_SETTINGS['unsafe_codes'], user_settings = user_settings, danger_modules_describe=danger_modules_describe)
+
+
+@app.route('/searching_history/', methods=['GET'])
+def searching_history():
+    history_list = fn.get_history_list()
+    return render_template('searching_history.html', history_list = history_list)
+
+
+@app.route('/searching_history/', methods=['POST'])
+def searching_history_post():
+    params = list(request.form)
+    history_list = fn.get_history_list(int(params[0]))
+    danger_modules_describe = fn.get_danger_modules_describe(int(params[0]))
+    return render_template('searching_history.html', history_list = history_list, danger_modules_describe=danger_modules_describe)
 
 
 @app.route('/contacts/')
