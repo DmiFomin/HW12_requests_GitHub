@@ -54,50 +54,24 @@
 
 <div class="container-fluid p-0">
 
-    <section class="resume-section p-3 p-lg-5 d-flex justify-content-center" id="searching">
+    <section class="resume-section p-3 p-lg-5 d-flex justify-content-center" id="searching_history">
         <div class="w-100">
 
             <form method="post">
 
-                <h2 class="mb-5">Поиск</h2>
-
-                <div class="w-100">
-                    <div class="subheading mb-3">Что искать</div>
-                    <ul class="fa-ul mb-0">
-
-                        {% for item in unsafe_codes %}
-                        <li>
-                            {% if user_settings[item['string_code']] == 'on' %}
-                                <input type="checkbox" class="checkbox" name={{item['string_code']}} id={{item['string_code']}} checked/>
-                            {% else %}
-                                <input type="checkbox" class="checkbox" name={{item['string_code']}} id={{item['string_code']}}/>
-                            {% endif %}
-                             <label>
-                                {{item['description']}}
-                            </label>
-                        </li>
+                <h2 class="mb-5">История поиска</h2>
+                </br>
+                <div class="btn-group-vertical" role="group" aria-label="Vertical button group">
+                    {% for item in history_list %}
+                        <button type="submit" class="btn btn-secondary" name={{item['id']}}>{{item['date']}}</button>
+                        <h8>Репозиторий: {{item['repository']}}</h8>
+                        {% for param in item['params'] %}
+                            <h8>{{param}}</h8>
                         {% endfor %}
-
-                    </ul>
+                    {% endfor %}
                 </div>
-
-                </br>
-
-                <div class="w-100">
-                    <div class="subheading mb-3">Репозиторий</div>
-                    <ul class="fa-ul mb-0">
-
-                        <label>Для поиска в определенном репозитории введите имя пользователя этого репозитория</label>
-                        <input type="text" class="form-control" name="repository_name" placeholder="Имя пользователя" value={{user_settings['repository_name']}}>
-
-                    </ul>
-                </div>
-
                 </br>
                 </br>
-
-                <button type="submit" class="btn btn-warning">Искать</button>
-
                 {% if danger_modules_describe != 'BeforeSearching' %}
 
                     {% if danger_modules_describe == 'Searching' %}
@@ -108,8 +82,6 @@
                         </div>
                     {% else %}
                         {% if danger_modules_describe %}
-                            </br>
-                            </br>
                             <div class="w-100">
                                 <div class="subheading mb-3">Результаты поиска</div>
                                     <ul class="fa-ul mb-0">
@@ -136,12 +108,10 @@
 
                                     </ul>
                             </div>
-                        {% else %}
-                            <label>Результатов поиска нет</label>
                         {% endif %}
                     {% endif %}
                 {% endif %}
-            </form>
+           </form>
 
         </div>
 
