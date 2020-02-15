@@ -6,6 +6,8 @@ import re
 import requests
 import sqlite3
 import datetime
+import orm
+import utility
 
 
 def get_cursor():
@@ -13,12 +15,12 @@ def get_cursor():
     Получаем подключение к MSLite и курсор
     :return: возвращаем подключение и курсор
     '''
-    conn = sqlite3.connect('C:\\Users\\fomin\\DataBases_SQLite\\db_CheckingGitHub.db', check_same_thread=False)
+    conn = sqlite3.connect('H:\\Python\\db_CheckingGitHub.db', check_same_thread=False)
     cursor = conn.cursor()
     return conn, cursor
 
 
-def get_program_settings():
+def get_program_settings(is_SQLite):
     """
     Получаем настройки программы
     :return: Возвращаем словарь с настройками
@@ -36,33 +38,39 @@ def get_program_settings():
     #                     'phone': '8-123-123-12-12',
     #                     'email': 'email@email.com'}
 
-    unsafe_codes = []
-    program_settings = {}
+    if is_SQLite:
+        # из SQLite
+        unsafe_codes = []
+        program_settings = {}
 
-    # Получаем список уязвимостей
-    conn, cursor = get_cursor()
-    cursor.execute('SELECT us.language, us.string_code, us.description, us.add_description, s.description FROM Unsafe_codes us, Statuses s WHERE us.status = s.id')
-    result_unsafe_codes= cursor.fetchall()
+        # Получаем список уязвимостей
+        conn, cursor = get_cursor()
+        cursor.execute('SELECT us.language, us.string_code, us.description, us.add_description, s.description FROM Unsafe_codes us, Statuses s WHERE us.status = s.id')
+        result_unsafe_codes= cursor.fetchall()
 
-    for item in result_unsafe_codes:
-        unsafe_codes.append({'language': item[0],
-                             'string_code': item[1],
-                             'description': item[2],
-                             'add_description': item[3] if item[3] != None else '',
-                             'status': item[4]})
+        for item in result_unsafe_codes:
+            unsafe_codes.append({'language': item[0],
+                                 'string_code': item[1],
+                                 'description': item[2],
+                                 'add_description': item[3] if item[3] != None else '',
+                                 'status': item[4]})
 
+        #Получаем информацию о программе
+        cursor.execute('SELECT * FROM Settings')
+        result_settings = cursor.fetchall()[0]
 
-    # Получаем информацию о программе
-    cursor.execute('SELECT * FROM Settings')
-    result_settings = cursor.fetchall()[0]
+        program_settings = {'path_to_token': os.path.join(os.getcwd(), result_settings[1]),
+                            'unsafe_codes': unsafe_codes,
+                            'author': result_settings[2],
+                            'phone': result_settings[3],
+                            'email': result_settings[4]}
 
-    program_settings = {'path_to_token': os.path.join(os.getcwd(), result_settings[1]),
-                        'unsafe_codes': unsafe_codes,
-                        'author': result_settings[2],
-                        'phone': result_settings[3],
-                        'email': result_settings[4]}
+        conn.close()
 
-    conn.close()
+    else:
+        # из ORM sqlalchemy
+        program_settings = orm.get_program_settings()
+
     return program_settings
 
 
@@ -208,112 +216,99 @@ def write_json(danger_modules_describe):
         pprint.pprint(danger_modules_describe)
 
 
-def dict_to_str(dict):
-    '''
-    Для записи в БД преобразуем словарь в строку с разделителями |
-    :param dict: словарь
-    :return: строка
-    '''
-    result = ''
-    for item in dict.items():
-        result = f'{result}|{item}'
-    return result
-
-
-def dict_from_str(s):
-    '''
-    Получаем из строки словарь
-    :param s: строка
-    :return: словарь
-    '''
-    result = {}
-    for item in s.split('|'):
-        if item:
-            result[item.split("'")[1]] = item.split("'")[3]
-    return result
-
-
-def write_to_base(danger_modules_describe, user_settings):
+def write_to_base(danger_modules_describe, user_settings, is_SQLite):
     '''
     Записываем результат в БД
     :param danger_modules_describe: словарь с опасным кодом
     :param user_settings: настройки пользователя
     '''
-    conn, cursor = get_cursor()
-    cursor.execute("insert into History (date, params) VALUES (?, ?)", (datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S"), dict_to_str(user_settings)))
-    id_history = cursor.lastrowid
+    if is_SQLite:
+        conn, cursor = get_cursor()
+        cursor.execute("insert into History (date, params) VALUES (?, ?)", (datetime.datetime.now().strftime("%d.%m.%Y %H:%M:%S"), utility.dict_to_str(user_settings)))
+        id_history = cursor.lastrowid
 
-    for item in danger_modules_describe.items():
-        cursor.execute("insert into History_repositories (history, repository, language) VALUES (?, ?, ?)", (id_history, item[0], item[1]['languages'][0]))
-        id_history_repositories = cursor.lastrowid
+        for item in danger_modules_describe.items():
+            cursor.execute("insert into History_repositories (history, repository, language) VALUES (?, ?, ?)", (id_history, item[0], item[1]['languages'][0]))
+            id_history_repositories = cursor.lastrowid
 
-        for item_unsafe_modules in item[1]['unsafe_modules']:
-            cursor.execute("insert into History_unsafe_code (repository, unsafe_code) VALUES (?, ?)", (id_history_repositories, dict_to_str(item_unsafe_modules)))
+            for item_unsafe_modules in item[1]['unsafe_modules']:
+                cursor.execute("insert into History_unsafe_code (repository, unsafe_code) VALUES (?, ?)", (id_history_repositories, utility.dict_to_str(item_unsafe_modules)))
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
+    else:
+        orm.add_history(danger_modules_describe, user_settings)
 
 
-def get_history_list(id=None):
+def get_history_list(is_SQLite, id=None):
     '''
     Получаем из БД Историю поиска
     :param id: идентификатор записи
     :return: список
     '''
-    conn, cursor = get_cursor()
-    if id:
-        cursor.execute('SELECT * FROM History WHERE id=?', (id,))
+    if is_SQLite:
+        conn, cursor = get_cursor()
+        if id:
+            cursor.execute('SELECT * FROM History WHERE id=?', (id,))
+        else:
+            cursor.execute('SELECT * FROM History')
+        result_query = cursor.fetchall()
+
+        result = []
+        for item in result_query:
+            param_list = []
+            repository = ''
+            for param in item[2].split('|'):
+                if param:
+                    string_code = param.split("'")[1]
+                    if string_code == 'repository_name':
+                        repository = param.split("'")[3]
+                    else:
+                        cursor.execute('SELECT description from Unsafe_codes WHERE string_code=?', (string_code,))
+                        result_description = cursor.fetchall()
+                        param_list.append(result_description[0][0])
+
+            result.append({'id': item[0],
+                      'date': item[1],
+                      'repository': repository,
+                      'params': param_list})
+
+        conn.close()
     else:
-        cursor.execute('SELECT * FROM History')
-    result_query = cursor.fetchall()
+        result = orm.get_history_list(id)
 
-    result = []
-    for item in result_query:
-        param_list = []
-        repository = ''
-        for param in item[2].split('|'):
-            if param:
-                string_code = param.split("'")[1]
-                if string_code == 'repository_name':
-                    repository = param.split("'")[3]
-                else:
-                    cursor.execute('SELECT description from Unsafe_codes WHERE string_code=?', (string_code,))
-                    result_description = cursor.fetchall()
-                    param_list.append(result_description[0][0])
-
-        result.append({'id': item[0],
-                  'date': item[1],
-                  'repository': repository,
-                  'params': param_list})
-
-    conn.close()
     return result
 
 
-def get_danger_modules_describe(id):
+def get_danger_modules_describe(id, is_SQLite):
     '''
     Получаем из БД опасный код для истории поиска
     :param id: идентификатор записи
     :return: словарь
     '''
-    conn, cursor = get_cursor()
-    cursor.execute('SELECT id, repository, language FROM History_repositories WHERE history=?', (id,))
-    result_repository = cursor.fetchall()
-    danger_modules_describe = {}
-    for item_repository in result_repository:
-        cursor.execute('SELECT unsafe_code FROM History_unsafe_code WHERE repository=?', (item_repository[0],))
-        result_unsafe_code = cursor.fetchall()
-        list_unsafe_code = []
-        for item_unsafe_code in result_unsafe_code:
-            list_unsafe_code.append(dict_from_str(item_unsafe_code[0]))
+    if is_SQLite:
+        conn, cursor = get_cursor()
+        cursor.execute('SELECT id, repository, language FROM History_repositories WHERE history=?', (id,))
+        result_repository = cursor.fetchall()
+        danger_modules_describe = {}
 
-        danger_modules_describe[item_repository[1]] = {'languages': [item_repository[2]], 'unsafe_modules': list_unsafe_code}
-        #print(danger_modules_describe)
-    conn.close()
+        for item_repository in result_repository:
+            cursor.execute('SELECT unsafe_code FROM History_unsafe_code WHERE repository=?', (item_repository[0],))
+            result_unsafe_code = cursor.fetchall()
+            list_unsafe_code = []
+            for item_unsafe_code in result_unsafe_code:
+                list_unsafe_code.append(utility.dict_from_str(item_unsafe_code[0]))
+
+            danger_modules_describe[item_repository[1]] = {'languages': [item_repository[2]], 'unsafe_modules': list_unsafe_code}
+
+        conn.close()
+    else:
+        danger_modules_describe = orm.get_danger_modules_describe(id)
+
     return danger_modules_describe
 
 
-def seaching_unsafe_code(user_settings, PROGRAM_SETTINGS):
+def seaching_unsafe_code(user_settings, PROGRAM_SETTINGS, is_SQLite):
     '''
     Поиск опасного кода
     :param user_settings: настройки пользователя
@@ -354,7 +349,7 @@ def seaching_unsafe_code(user_settings, PROGRAM_SETTINGS):
         except Exception as e:
             print(e)
 
-
+    print(danger_modules_describe)
     #write_json(danger_modules_describe)
-    write_to_base(danger_modules_describe, user_settings)
+    write_to_base(danger_modules_describe, user_settings, is_SQLite)
     return danger_modules_describe

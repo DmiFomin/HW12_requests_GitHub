@@ -1,10 +1,12 @@
 import functions as fn
 from flask import Flask, render_template, request
 
+# SQL или ORM sqlalchemy
+is_SQLite = False
 
 # Записываем настройки
-PROGRAM_SETTINGS = fn.get_program_settings()
-user_settings = {'eval': 'on', 'sqlite3': 'on', 'pickle': 'on', 'EMAIL_HOST_USER': 'on', 'EMAIL_HOST_PASSWORD': 'on', '11':'22'}
+PROGRAM_SETTINGS = fn.get_program_settings(is_SQLite)
+user_settings = {'eval': 'on', 'sqlite3': 'on', 'pickle': 'on', 'EMAIL_HOST_USER': 'on', 'EMAIL_HOST_PASSWORD': 'on'}
 contacts_info = {'author': PROGRAM_SETTINGS['author'],
                  'phone': PROGRAM_SETTINGS['phone'],
                  'email': PROGRAM_SETTINGS['email']}
@@ -41,21 +43,21 @@ def run_post():
             user_settings[param] = params['repository_name']
 
     #print(user_settings)
-    danger_modules_describe = fn.seaching_unsafe_code(user_settings, PROGRAM_SETTINGS)
+    danger_modules_describe = fn.seaching_unsafe_code(user_settings, PROGRAM_SETTINGS, is_SQLite)
     return render_template('searching.html', unsafe_codes = PROGRAM_SETTINGS['unsafe_codes'], user_settings = user_settings, danger_modules_describe=danger_modules_describe)
 
 
 @app.route('/searching_history/', methods=['GET'])
 def searching_history():
-    history_list = fn.get_history_list()
+    history_list = fn.get_history_list(is_SQLite)
     return render_template('searching_history.html', history_list = history_list)
 
 
 @app.route('/searching_history/', methods=['POST'])
 def searching_history_post():
     params = list(request.form)
-    history_list = fn.get_history_list(int(params[0]))
-    danger_modules_describe = fn.get_danger_modules_describe(int(params[0]))
+    history_list = fn.get_history_list(is_SQLite, int(params[0]))
+    danger_modules_describe = fn.get_danger_modules_describe(int(params[0]), is_SQLite)
     return render_template('searching_history.html', history_list = history_list, danger_modules_describe=danger_modules_describe)
 
 
